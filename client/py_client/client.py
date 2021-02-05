@@ -79,7 +79,12 @@ def read_server(env):
     
 def read_input(env):
     print("\n========== read input state ==========")
-    client_input = int(input("waiting for client input: "))
+    inp = ""
+
+    while(not inp.isdigit()):
+        inp = input("waiting for client input: ")
+
+    client_input = int(inp)
 
     env.move = client_input
     return States.SEND
