@@ -1,9 +1,15 @@
 from ast import Str
-from lib.fsm.fsm import fsm_run
-from lib.fsm.fsm import Environment
-from lib.fsm.fsm import Transition
-from lib.fsm.fsm import DefaultStates
+from ctypes import *      
+from fsm.fsm import fsm_run
+from fsm.fsm import Environment
+from fsm.fsm import Transition
+from fsm.fsm import DefaultStates
 from enum import Enum
+
+import socket       
+
+# Create a socket object  
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
 
 class States(Enum):
     SETUP = DefaultStates.STATE_START
@@ -26,8 +32,8 @@ class Globals(Environment):
         self.move = -1
         self.server_input = -1
         self.board = []
-        for i in range(9):
-            self.board.append(Tile(-1, -1))
+        for i in range(10):
+            self.board.append(Tile(-4, -4))
 
 
 def init_to_start(env):
@@ -45,7 +51,15 @@ def start_to_exit(env):
 
 def setup(env):
     print("\n========== setup state ==========")
-    e = env
+    e = env        
+  
+    # Define the IP address and port on which you want to connect  
+    # ip_addr = '108.172.15.124'
+    local = '127.0.0.1'
+    port = 6969
+
+    # connect to the server on local computer  
+    s.connect((local, port))  
 
     print("loading...")
     print("Connecting to server")
@@ -56,15 +70,20 @@ def read_server(env):
     print("\n========== read server state ==========")
     inp = ""
 
-    while(not inp.isdigit()):
-        inp = input("waiting for server input: ")
+    # while(not inp.isdigit()):
+    #     # inp = input("waiting for server input: ")
+    #     print("reading")
+    #     inp = s.recv(1024)
+    #     print("read ", inp)
 
+    inp = s.recv(1024)
+    print("Client received: ", inp)
     server_input = int(inp)
 
     if (server_input < 9 and env.setup):
-        env.id = 1  # player 2
+        env.id = 0  # player 2
     elif (server_input >= 9 and env.setup):
-        env.id = 0  # player 1
+        env.id = 1  # player 1
     env.setup = False
 
     env.server_input = server_input
@@ -92,17 +111,25 @@ def read_input(env):
 def send(env):
     print("\n========== send state ==========")
     print("sending " + str(env.move) + " to server")
-
+    s.send(str(env.move).encode())
     return States.READ_SERVER
 
 def update(env):
     print("\n========== update state ==========")
 
-    env.board[env.server_input].id = env.server_input
-    env.board[env.server_input].owner = (0, 1)[env.id == 0]
+    # env.board[env.server_input].id = env.server_input
+    if(env.id == 0):
+        env.board[env.server_input].owner = 0
+    else:
+        env.board[env.server_input].owner = 1
 
-    env.board[env.move].id = env.move
+    # env.board[env.move].id = env.move
     env.board[env.move].owner = env.id
+
+    for i in range(9):
+        print("", env.board[i].id, env.board[i].owner)
+
+    print("9: ", env.board[9].id, env.board[9].owner)
 
     for i in range(9):
         c = "?"
@@ -111,6 +138,8 @@ def update(env):
             c = "O"
         elif (env.board[i].owner == 1):
             c = "X"
+        elif (env.board[i].owner == -1):
+            c = "?"
 
         print(c, end='')
         if (i == 2 or i == 5 or i == 8):
@@ -147,3 +176,4 @@ def main():
     fsm_run(glbl, start_state, next_state, tran_table)
 
 main()
+s.close()
