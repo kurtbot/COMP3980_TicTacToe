@@ -52,7 +52,7 @@ static int common_error(Environment *globals);
 
 int main()
 {
-    Globals globals;
+    Globals *globals = malloc(sizeof(Globals));
 
     Transition trn_table[] =
         {
@@ -74,7 +74,7 @@ int main()
 
     start_state = STATE_INIT;
     end_state = SETUP;
-    status = fsm_run((Environment *)&globals, &start_state, &end_state, trn_table);
+    status = fsm_run((Environment *)globals, &start_state, &end_state, trn_table);
 
     if (status != 0)
     {

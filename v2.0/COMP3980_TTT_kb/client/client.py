@@ -56,7 +56,7 @@ def setup(env):
     print("loading...")
     print("Connecting to server")
 
-    s.send(str(0).encode())
+    s.send("b0".encode())
 
     return States.READ_SERVER
 
@@ -75,18 +75,22 @@ def read_server(env):
     if(debug):
         print("Client received: ", inp)
     # split input: 10 <client_fd>
+    
     if(int(str(inp.decode()).split(" ")[0]) == 10):
         env.target_fd = int(str(inp.decode()).split(" ")[1])
-    server_input = int(str(inp.decode()).split(" ")[0])
+        if (len(str(inp.decode()).split(" ")) == 3 and env.setup):
+            server_input = 9
+            env.id = 1  # player 1
+            env.setup = False
+    else:
+        server_input = int(str(inp.decode()).split(" ")[0])
 
-    print(server_input)
+    print(env.setup)
 
     if (server_input < 9 and env.setup):
         env.id = 0  # player 2
-    elif (server_input == 9 and env.setup):
-        env.id = 1  # player 1
-    env.setup = False
-
+        env.setup = False
+    
     env.server_input = server_input
 
     # Verify Server Data
@@ -125,14 +129,14 @@ def send(env):
     data = ""
     i = 0
     for i in range(9):
-        data += str(env.board[i])
+        data += (str(env.board[i].id), '_')[env.board[i].id == -4]
 
     formattedMove = str(env.target_fd) + " " + data + " " + str(env.move) + " " + str(env.id)
     
     if(debug):
         print("\n========== send state ==========")
         print("sending " + formattedMove + " to server")
-    s.send(str(env.formattedMove).encode())
+    s.send(str(formattedMove).encode())
     return States.READ_SERVER
 
 def update(env):

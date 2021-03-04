@@ -7,9 +7,16 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <time.h>
 
 #define PORT 8080
 #define BUFSIZE 1024
+
+typedef struct
+{
+    int p1;
+    int p2;
+} room;
 
 void send_to_client(int client, int nbytes_recvd, char *recv_buf, fd_set *master)
 {
@@ -22,51 +29,44 @@ void send_to_client(int client, int nbytes_recvd, char *recv_buf, fd_set *master
     }
 }
 
-static int equals3(int a, int b, int c)
+int check_chatrooms_pexist(room **rooms, int client, int roomsize)
 {
-    return (a == b && b == c && a != -1);
+    printf("checking\n");
+    int i = 0;
+    while (i < roomsize)
+    {
+        printf("checking %d: contains p1: %d, p2:%d, client: %d\n", i, (*rooms)[i].p1, (*rooms)[i].p2, client);
+        if((*rooms)[i].p1 == client || (*rooms)[i].p2 == client)
+            return 1;
+        i++;
+    }
+    printf("ret 0\n");
+    return 0;
 }
 
-static int checkWinner(int board[3][3])
+int get_chatroom_pair(room **rooms, int client, int roomsize)
 {
-    int winner = -1;
-
-    // vertical
-    for (int i = 0; i < 3; i++)
+    int i = 0;
+    while (i < roomsize)
     {
-        if (equals3(board[i][0], board[i][1], board[i][2]))
-            winner = board[i][0];
+        if ((*rooms)[i].p1 == client)
+        {
+            return (*rooms)[i].p2;
+        }
+        else if ((*rooms)[i].p2 == client)
+        {
+            return (*rooms)[i].p1;
+        }
+        i++;
     }
-
-    // horizontal
-    for (int i = 0; i < 3; i++)
-    {
-        if (equals3(board[0][i], board[1][i], board[2][i]))
-            winner = board[i][0];
-    }
-
-    // diagonal
-    for (int i = 0; i < 3; i++)
-    {
-        if (equals3(board[0][0], board[1][1], board[2][2]))
-            winner = board[0][0];
-    }
-
-    for (int i = 0; i < 3; i++)
-    {
-        if (equals3(board[2][0], board[1][1], board[0][2]))
-            winner = board[2][0];
-    }
-
-    return winner;
+    return -1;
 }
 
-void send_recv(int currclient, fd_set *master, int *waitingclient)
+void send_recv(int currclient, fd_set *master, int *waitingclient, room **rooms, int *numrooms)
 {
     int nbytes_recvd;
     char recv_buf[BUFSIZE];
-
-    if ((nbytes_recvd = read(currclient, recv_buf, BUFSIZE)) <= 0)
+    if ((nbytes_recvd = recv(currclient, recv_buf, BUFSIZE, 0)) <= 0)
     {
         if (nbytes_recvd == 0)
         {
@@ -83,100 +83,40 @@ void send_recv(int currclient, fd_set *master, int *waitingclient)
     {
         //	printf("%s\n", recv_buf);]
         // parse message here and do shit
-
-        if (strcmp(recv_buf, "0") == 0)
+        // if client is in a room
+        // find pair
+        // if (currclient is not in chat rooms)
+        if (!check_chatrooms_pexist(rooms, currclient, *numrooms))
         {
-            printf("Waiting Client: %d\n", *waitingclient);
-            // find pair
+            printf("Waiting Client: %d for current client %d\n", *waitingclient, currclient);
             if (*waitingclient == -1)
             {
                 // set as waiting
+                printf("assigned waiter to %d\n", currclient);
                 *waitingclient = currclient;
             }
             else
             {
-                // match
-                char wtc[6];
-                char ctw[6];
-                sprintf(wtc, "10 %d", *waitingclient);
-                sprintf(ctw, "10 %d", currclient);
-                
-                printf("wtc: %s\n", wtc);
+                char *f = "Match found";
+                send_to_client(currclient, strlen(f), f, master);
+                send_to_client(*waitingclient, strlen(f), f, master);
 
-                send_to_client(currclient, strlen(wtc), wtc, master);
-                send_to_client(*waitingclient, strlen(ctw), ctw, master);
+                // create chat room here
+                (*rooms)[*numrooms].p1 = *waitingclient;
+                (*rooms)[*numrooms].p2 = currclient;
+                printf("incrementing\n");
+                *numrooms = *numrooms + 1;
+                printf("numrooms %d\n", *numrooms);
+                *rooms = (room*)realloc(*rooms, *numrooms * sizeof(room) + 1);
                 *waitingclient = -1;
             }
         }
         else
         {
-            int target_client;
-            char *msg = strtok(recv_buf, " ");
-            target_client = atoi("" + msg[0]);
-            char *board = &msg[1];
-            char move = msg[2];
-            char senderNo = msg[3];
-            for (int i = 0; i < 9; ++i)
-            {
-                if (board[i] == move)
-                    // move exists
-                    send_to_client(currclient, 1, "9", master);
-            }
+            printf("sending\n");
 
-            for (int i = 0; i < 10; i++)
-            {
-                if (i == 9)
-                {
-                    send_to_client(currclient, 2, "14", master);
-                    send_to_client(target_client, 2, "14", master);
-                }
-
-                if (board[i] == '_')
-                {
-                    break;
-                }
-            }
-
-            // check winner
-            int brd[3][3] = {{-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}};
-
-            int k = 0;
-            for (int i = 0; i < 3; i++)
-            {
-                for (int j = 0; j < 3; j++)
-                {
-                    if (board[k] != '_')
-                        brd[i][j] = atoi("" + board[k++]);
-                }
-            }
-
-            int winner;
-            if ((winner = checkWinner(brd)) != -1)
-            {
-                if (winner + '0' == senderNo)
-                {
-                    send_to_client(currclient, 2, "12", master);
-                    send_to_client(target_client, 2, "13", master);
-                }
-                else
-                {
-                    send_to_client(currclient, 2, "13", master);
-                    send_to_client(target_client, 2, "12", master);
-                }
-            }
+            send_to_client(get_chatroom_pair(rooms, currclient, *numrooms), nbytes_recvd, recv_buf, master);
         }
-
-        // if (0)
-        // find a pair
-        // if pair is found
-        //  send current client pair code
-        //  send to pair curr client code
-        // or
-        //  place in waiting
-        //  send 11 to curr client
-
-        // else
-        //
     }
 }
 
@@ -205,27 +145,31 @@ void connection_accept(fd_set *master, int *fdmax, int sockfd, struct sockaddr_i
 void connect_request(int *sockfd, struct sockaddr_in *my_addr)
 {
     int yes = 1;
-        
-    if ((*sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+
+    if ((*sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+    {
         perror("Socket");
         exit(1);
     }
-        
+
     my_addr->sin_family = AF_INET;
     my_addr->sin_port = htons(8080);
     my_addr->sin_addr.s_addr = INADDR_ANY;
     memset(my_addr->sin_zero, 0, sizeof my_addr->sin_zero);
-        
-    if (setsockopt(*sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
+
+    if (setsockopt(*sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1)
+    {
         perror("setsockopt");
         exit(1);
     }
-        
-    if (bind(*sockfd, (struct sockaddr *)my_addr, sizeof(struct sockaddr)) == -1) {
+
+    if (bind(*sockfd, (struct sockaddr *)my_addr, sizeof(struct sockaddr)) == -1)
+    {
         perror("Unable to bind");
         exit(1);
     }
-    if (listen(*sockfd, 10) == -1) {
+    if (listen(*sockfd, 10) == -1)
+    {
         perror("listen");
         exit(1);
     }
@@ -235,13 +179,18 @@ void connect_request(int *sockfd, struct sockaddr_in *my_addr)
 
 int main()
 {
+    time_t t;
     fd_set master;
     fd_set read_fds;
     int fdmax, i;
     int sockfd = 0;
     int waiting = -1;
+    int numrooms = 1;
     struct sockaddr_in my_addr, client_addr;
 
+    room *rooms = (room*) malloc(sizeof(room));
+    rooms[0].p1 = -1;
+    rooms[0].p2 = -1;
     FD_ZERO(&master);
     FD_ZERO(&read_fds);
     connect_request(&sockfd, &my_addr);
@@ -264,7 +213,7 @@ int main()
                 if (i == sockfd)
                     connection_accept(&master, &fdmax, sockfd, &client_addr);
                 else
-                    send_recv(i, &master, &waiting);
+                    send_recv(i, &master, &waiting, &rooms, &numrooms);
             }
         }
     }

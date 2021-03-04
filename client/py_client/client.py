@@ -47,14 +47,14 @@ def setup(env):
     # Define the IP address and port on which you want to connect  
     # ip_addr = '108.172.15.124'
     local = '127.0.0.1'
-    port = 4200
+    port = 8080
 
     # connect to the server on local computer  
     s.connect((local, port))  
 
     print("loading...")
     print("Connecting to server")
-
+    s.send("ping".encode());
     return States.READ_SERVER
 
 def read_server(env):
@@ -156,6 +156,9 @@ def end(env):
     elif(env.server_input == 12):
         # DRAW
         print("Draw")
+    elif(env.server_input == 13):
+        # OPPONENT LEFT
+        print("Opponent Left")
     else:
         # ERROR
         return States.ERROR
