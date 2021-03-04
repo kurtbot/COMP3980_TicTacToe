@@ -1,0 +1,20 @@
+==================
+BNF
+==================
+
+// client to server
+<move> ::= [0-8]
+    - [0] top left
+    - [1] top middle
+    - [2] top right
+    - [3] center left
+    - [4] center middle
+    - [5] center right
+    - [6] bottom left
+    - [7] bottom middle
+    - [8] bottom right
+
+// server to client
+<end> :: = <move> | "9" | "10" | "11" | "12"
+    - 9 = turn message
+    - 10/11/12 = win/lose/tie message

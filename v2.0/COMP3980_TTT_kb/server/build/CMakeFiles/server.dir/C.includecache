@@ -1,0 +1,28 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/Users/brian/Desktop/Brian/BCIT/Term4/COMP3980/Assignments/COMP3980_TicTacToe/v2.0/COMP3980_TTT_kb/server/kfsm.h
+
+/Users/brian/Desktop/Brian/BCIT/Term4/COMP3980/Assignments/COMP3980_TicTacToe/v2.0/COMP3980_TTT_kb/server/server.c
+kfsm.h
+/Users/brian/Desktop/Brian/BCIT/Term4/COMP3980/Assignments/COMP3980_TicTacToe/v2.0/COMP3980_TTT_kb/server/kfsm.h
+ctype.h
+-
+stdio.h
+-
+stdlib.h
+-
+unistd.h
+-
+sys/socket.h
+-
+string.h
+-
+netinet/in.h
+-
+

@@ -1,0 +1,16 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/Users/brian/Desktop/Brian/BCIT/Term4/COMP3980/Assignments/COMP3980_TicTacToe/server/c_server/kurt/kfsm.c
+kfsm.h
+/Users/brian/Desktop/Brian/BCIT/Term4/COMP3980/Assignments/COMP3980_TicTacToe/server/c_server/kurt/kfsm.h
+stdio.h
+-
+
+/Users/brian/Desktop/Brian/BCIT/Term4/COMP3980/Assignments/COMP3980_TicTacToe/server/c_server/kurt/kfsm.h
+
