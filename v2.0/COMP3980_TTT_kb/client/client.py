@@ -75,9 +75,11 @@ def read_server(env):
     if(debug):
         print("Client received: ", inp)
     # split input: 10 <client_fd>
-    if(int(inp.split()[0]) == 10):
-        env.target_fd = int(inp.split()[1])
-    server_input = int(inp.split()[0])
+    if(int(str(inp.decode()).split(" ")[0]) == 10):
+        env.target_fd = int(str(inp.decode()).split(" ")[1])
+    server_input = int(str(inp.decode()).split(" ")[0])
+
+    print(server_input)
 
     if (server_input < 9 and env.setup):
         env.id = 0  # player 2

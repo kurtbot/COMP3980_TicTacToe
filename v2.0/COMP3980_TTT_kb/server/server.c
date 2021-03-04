@@ -96,8 +96,13 @@ void send_recv(int currclient, fd_set *master, int *waitingclient)
             else
             {
                 // match
-                char *wtc = "" + '0' + *waitingclient;
-                char *ctw = "" + '0' + currclient;
+                char wtc[6];
+                char ctw[6];
+                sprintf(wtc, "10 %d", *waitingclient);
+                sprintf(ctw, "10 %d", currclient);
+                
+                printf("wtc: %s\n", wtc);
+
                 send_to_client(currclient, strlen(wtc), wtc, master);
                 send_to_client(*waitingclient, strlen(ctw), ctw, master);
                 *waitingclient = -1;
