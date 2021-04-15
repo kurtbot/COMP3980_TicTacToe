@@ -45,12 +45,12 @@ def setup(env):
     e = env        
   
     # Define the IP address and port on which you want to connect  
-    # ip_addr = '108.172.15.124'
-    local = '127.0.0.1'
-    port = 4200
+    ip_addr = '108.172.15.30'
+    # local = '127.0.0.1'
+    port = 8080
 
     # connect to the server on local computer  
-    s.connect((local, port))  
+    s.connect((ip_addr, port))  
 
     print("loading...")
     print("Connecting to server")
@@ -61,12 +61,6 @@ def read_server(env):
     if(debug):
         print("\n========== read server state ==========")
     inp = ""
-
-    # while(not inp.isdigit()):
-    #     # inp = input("waiting for server input: ")
-    #     print("reading")
-    #     inp = s.recv(1024)
-    #     print("read ", inp)
 
     inp = s.recv(1024)
     if(debug):

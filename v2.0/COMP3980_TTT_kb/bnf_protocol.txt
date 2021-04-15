@@ -15,6 +15,7 @@ BNF
     - [8] bottom right
 
 // server to client
-<end> :: = <move> | "9" | "10" | "11" | "12"
+<end> :: = <move> | "9" | "10" | "11" | "12" | "13"
     - 9 = turn message
     - 10/11/12 = win/lose/tie message
+    - 13 = "Opponent Left"

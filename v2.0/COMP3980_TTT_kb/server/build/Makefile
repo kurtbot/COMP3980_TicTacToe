@@ -142,33 +142,6 @@ server/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/build
 .PHONY : server/fast
 
-kfsm.o: kfsm.c.o
-
-.PHONY : kfsm.o
-
-# target to build an object file
-kfsm.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/kfsm.c.o
-.PHONY : kfsm.c.o
-
-kfsm.i: kfsm.c.i
-
-.PHONY : kfsm.i
-
-# target to preprocess a source file
-kfsm.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/kfsm.c.i
-.PHONY : kfsm.c.i
-
-kfsm.s: kfsm.c.s
-
-.PHONY : kfsm.s
-
-# target to generate assembly for a file
-kfsm.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/kfsm.c.s
-.PHONY : kfsm.c.s
-
 server.o: server.c.o
 
 .PHONY : server.o
@@ -205,9 +178,6 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... server"
-	@echo "... kfsm.o"
-	@echo "... kfsm.i"
-	@echo "... kfsm.s"
 	@echo "... server.o"
 	@echo "... server.i"
 	@echo "... server.s"
