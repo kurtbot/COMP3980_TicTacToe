@@ -457,7 +457,6 @@ void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int
         int game = get_player_game(games, client);
         if ((*games)[game].type == TTT)
         {
-<<<<<<< HEAD
             int uid = client;
             uint8_t client_uid[] = {
                 (uid >> 24) & 0xFF,
@@ -470,9 +469,7 @@ void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int
                 printf("converted uid %d\n", converted_uid);
                 printf("client %d send data\n", client);
             }
-=======
             printf("client %d send data\n", client);
->>>>>>> 6b430a3a2d1afd3a4162c4e52e680f073d94d307
             int rettype = -1;
             if ((*games)[game].ttt_turn == 1)
             {
