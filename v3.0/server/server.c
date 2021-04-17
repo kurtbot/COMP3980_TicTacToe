@@ -534,8 +534,14 @@ void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int
                         write(client, payload, 2);
                         return;
                     }
-                    if (buff[7] == ROCK || buff[7] == PAPER || buff[7] == SCISSORS) {
+                    if (buff[7] == ROCK || buff[7] == PAPER || buff[7] == SCISSORS)
+                    {
                         (*games)[game].rps_p1_move = buff[7];
+                        uint8_t payload[] = {
+                            SUCCESS,
+                            GAME_ACTION,
+                            0};
+                        write(client, payload, 3);
                     }
                     else
                     {
@@ -557,8 +563,14 @@ void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int
                         return;
                     }
 
-                    if (buff[7] == ROCK || buff[7] == PAPER || buff[7] == SCISSORS) {
+                    if (buff[7] == ROCK || buff[7] == PAPER || buff[7] == SCISSORS)
+                    {
                         (*games)[game].rps_p2_move = buff[7];
+                        uint8_t payload[] = {
+                            SUCCESS,
+                            GAME_ACTION,
+                            0};
+                        write(client, payload, 3);
                     }
                     else
                     {
@@ -588,27 +600,46 @@ void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int
                     }
                     else
                     {
-                        int payload_len = 1;
-                        uint8_t winres[] = {
-                            UPDATE,
-                            END_OF_GAME,
-                            payload_len,
-                            1};
-
-                        uint8_t loseres[] = {
-                            UPDATE,
-                            END_OF_GAME,
-                            payload_len,
-                            2};
+                        int payload_len = 2;
 
                         if (winner == 1)
                         {
+                            uint8_t winres[] = {
+                                UPDATE,
+                                END_OF_GAME,
+                                payload_len,
+                                1,
+                                (*games)[game].rps_p2_move
+                            };
+
+                            uint8_t loseres[] = {
+                                UPDATE,
+                                END_OF_GAME,
+                                payload_len,
+                                2,
+                                (*games)[game].rps_p1_move
+                                };
                             printf("win p1");
                             write((*games)[game].fdp1, winres, 4);
                             write((*games)[game].fdp2, loseres, 4);
                         }
                         else
                         {
+                            uint8_t winres[] = {
+                                UPDATE,
+                                END_OF_GAME,
+                                payload_len,
+                                1,
+                                (*games)[game].rps_p1_move
+                            };
+
+                            uint8_t loseres[] = {
+                                UPDATE,
+                                END_OF_GAME,
+                                payload_len,
+                                2,
+                                (*games)[game].rps_p2_move
+                                };
                             printf("win p2");
                             write((*games)[game].fdp1, loseres, 4);
                             write((*games)[game].fdp2, winres, 4);
