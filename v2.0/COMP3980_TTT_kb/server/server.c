@@ -9,7 +9,7 @@
 #include <netdb.h>
 #include <time.h>
 
-#define PORT 8080
+#define PORT 2034
 #define BUFSIZE 1024
 #define DEBUG 0
 
@@ -338,11 +338,11 @@ void connect_request(int *sockfd, struct sockaddr_in *my_addr)
     }
 
     // udp
-    if ((*sockfd = socket(AF_INET, SOCK_DGRAM, 0) == -1))
-    {
-        perror("Socket UDP error");
-        exit(1);
-    }
+    // if ((*sockfd = socket(AF_INET, SOCK_DGRAM, 0) == -1))
+    // {
+    //     perror("Socket UDP error");
+    //     exit(1);
+    // }
     
     bind(*sockfd, (struct sockaddr *)my_addr, sizeof(struct sockaddr));
 
