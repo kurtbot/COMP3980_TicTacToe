@@ -114,7 +114,7 @@ void add_to_wait(WaitList **waiting, int client, int game);
 void remove_from_wait(WaitList **waiting, int client);
 int find_pair(WaitList **waiting, GameId game_id);
 void init_games(Game **games);
-Game init_game(int type, int fdp1, int fdp2);
+void init_game(Game *g, int type, int fdp1, int fdp2);
 int get_game_pair(Game **game, int play_fd);
 int get_player_game(Game **game, int play_fd);
 void create_game(Game **games, int fdp1, int fdp2, int game);
@@ -227,6 +227,7 @@ void connection_accept(fd_set *master, int *fdmax, int sockfd, struct sockaddr_i
                 int pair = 0;
                 printf("pair %d\n", pair);
                 int gameType = buff[8];
+                printf("gametype %d\n", gameType);
                 if ((pair = find_pair(waiting, gameType)) == 0)
                 {
                     add_to_wait(waiting, newsockfd, gameType);
@@ -302,6 +303,7 @@ void connect_request(int *sockfd, struct sockaddr_in *my_addr)
 
 int handle_ttt(Game *game, int client, uint8_t *buff)
 {
+    printf("handling ttt\n");
     // type
     int reqType = buff[4];
 
@@ -320,13 +322,19 @@ int handle_ttt(Game *game, int client, uint8_t *buff)
 
     // move
     int move = buff[7];
-    if ((*game).ttt_board[move] != -1)
+    printf("move %d\n", move);
+    if (move > 8 || move < 0)
+        return INVALID_ACTION;
+
+    printf("board move %d\n", game->ttt_board[move]);
+    if (game->ttt_board[move] != -1)
         return INVALID_ACTION;
 
     (*game).ttt_board[move] = (*game).ttt_turn;
 
     // change turn
-    (*game).ttt_turn = (*game).ttt_turn == 1 ? 2 : 1;
+    printf("change turn\n");
+    (*game).ttt_turn = (*game).ttt_turn == O ? X : O;
 
     for (int i = 0; i < 10; i++)
     {
@@ -362,37 +370,49 @@ int handle_ttt(Game *game, int client, uint8_t *buff)
         }
     }
 
+    printf("check winner\n");
     // Check Win
     int winner;
     if ((winner = checkWinner(board)) != -1)
     {
         int payload_len = 2;
-            uint8_t winres[] = {
-                UPDATE,
-                END_OF_GAME,
-                payload_len,
-                1,
-                move};
-            
-            uint8_t loseres[] = {
-                UPDATE,
-                END_OF_GAME,
-                payload_len,
-                2,
-                move};
+        uint8_t winres[] = {
+            UPDATE,
+            END_OF_GAME,
+            payload_len,
+            1,
+            move};
+
+        uint8_t loseres[] = {
+            UPDATE,
+            END_OF_GAME,
+            payload_len,
+            2,
+            move};
         if (winner == 1)
-        {
-            write((*game).fdp1, winres, 5);
-            write((*game).fdp2, loseres, 5);
-        }
-        else
         {
             write((*game).fdp2, winres, 5);
             write((*game).fdp1, loseres, 5);
         }
+        else
+        {
+            write((*game).fdp1, winres, 5);
+            write((*game).fdp2, loseres, 5);
+        }
+        return UPDATE;
     }
 
-    return 0;
+    int payload_len = 1;
+    uint8_t moveres[] = {
+        UPDATE,
+        MOVE_MADE,
+        payload_len,
+        move};
+
+    write((*game).fdp1, moveres, 5);
+    write((*game).fdp2, moveres, 5);
+
+    return UPDATE;
 }
 
 void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int *numrooms)
@@ -402,6 +422,7 @@ void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int
     uint8_t buff[BUFF_SIZE];
     if ((num_bytes = read(client, buff, BUFF_SIZE)) <= 0)
     {
+        printf("numbytes %d\n", num_bytes);
         int game_pair;
         int game;
         if (num_bytes == 0)
@@ -411,6 +432,7 @@ void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int
             if (game_pair == -1)
             {
                 printf("%s\n", "hello mf");
+                remove_from_wait(waiting, client);
             }
             else
             {
@@ -444,30 +466,50 @@ void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int
                 (uid >> 8) & 0xFF,
                 uid & 0xFF,
             };
+            uint32_t converted_uid = (buff[1] << 24) | (buff[1] << 16) | (buff[2] << 8) | buff[3];
+            printf("converted uid %d\n", converted_uid);
             printf("client %d send data\n", client);
+            int rettype = -1;
             if ((*games)[game].ttt_turn == 1)
             {
-                if (compare_uid((*games)[game].p1uid, client_uid))
+                printf("handle TTT 1\n");
+                if (converted_uid == client)
                 {
                     int paylen = buff[6];
                     if (paylen > 0)
-                        handle_ttt(&((*games)[game]), client, buff);
+                        rettype = handle_ttt(&((*games)[game]), client, buff);
+
+                    if (rettype != UPDATE)
+                    {
+
+                        int payload_length = 2;
+                        uint8_t payload[] = {
+                            rettype,
+                            0};
+                        write(client, payload, payload_length);
+                    }
                 }
                 else
                 {
+                    printf("not your turn 1\n");
                     not_your_turn(client);
                 }
             }
             else
             {
-                if (compare_uid((*games)[game].p2uid, client_uid))
+                printf("handle TTT 2\n");
+                if (converted_uid == client)
                 {
                     int paylen = buff[6];
                     if (paylen > 0)
-                        handle_ttt(&((*games)[game]), client, buff);
+                        rettype = handle_ttt(&((*games)[game]), client, buff);
+
+                    if (rettype != UPDATE)
+                        not_your_turn(client);
                 }
                 else
                 {
+                    printf("not your turn 2\n");
                     not_your_turn(client);
                 }
             }
@@ -509,7 +551,6 @@ int find_pair(WaitList **waiting, GameId game_id)
             return (*waiting)[i].player;
         }
     }
-
     return 0;
 }
 
@@ -552,28 +593,31 @@ void init_games(Game **games)
 
     for (int i = 0; i < MAX_GAMES; i++)
     {
-        (*games)[i] = init_game(0, 0, 0);
+        printf("initializing games\n");
+        init_game(&(*games)[i], 0, 0, 0);
     }
 }
 
-Game init_game(int type, int fdp1, int fdp2)
+void init_game(Game *g, int type, int fdp1, int fdp2)
 {
-    Game g;
-    g.type = type;
-    g.fdp1 = fdp1;
-    g.fdp2 = fdp2;
+    printf("intializing...\n");
+    g->type = type;
+    g->fdp1 = fdp1;
+    g->fdp2 = fdp2;
 
     if (type == TTT)
     {
         for (int i = 0; i < 9; i++)
         {
-            g.ttt_board[i] = -1;
+            (*g).ttt_board[i] = -1;
+            printf("board %d\n", g->ttt_board[i]);
         }
+        g->ttt_turn = O;
     }
     else if (type == RPS)
     {
-        g.rps_p1_move = 0;
-        g.rps_p2_move = 0;
+        g->rps_p1_move = 0;
+        g->rps_p2_move = 0;
     }
 
     int uid1 = fdp1;
@@ -592,10 +636,8 @@ Game init_game(int type, int fdp1, int fdp2)
         uid2 & 0xFF,
     };
 
-    *g.p1uid = client_uid1;
-    *g.p2uid = client_uid2;
-
-    return g;
+    *g->p1uid = client_uid1;
+    *g->p2uid = client_uid2;
 }
 
 int get_game_pair(Game **game, int play_fd)
@@ -634,32 +676,7 @@ void create_game(Game **games, int fdp1, int fdp2, int game)
     {
         if ((*games)[i].type == 0)
         {
-            (*games)[i].type = game;
-            (*games)[i].fdp1 = fdp1;
-            (*games)[i].fdp2 = fdp2;
-            int uid1 = fdp1;
-            uint8_t client_uid1[] = {
-                (uid1 >> 24) & 0xFF,
-                (uid1 >> 16) & 0xFF,
-                (uid1 >> 8) & 0xFF,
-                uid1 & 0xFF,
-            };
-
-            int uid2 = fdp2;
-            uint8_t client_uid2[] = {
-                (uid2 >> 24) & 0xFF,
-                (uid2 >> 16) & 0xFF,
-                (uid2 >> 8) & 0xFF,
-                uid2 & 0xFF,
-            };
-
-            *(*games)[i].p1uid = client_uid1;
-            *(*games)[i].p2uid = client_uid2;
-
-            if (game == TTT)
-            {
-                (*games)[i].ttt_turn = 1;
-            }
+            init_game(&(*games)[i], game, fdp1, fdp2);
             break;
         }
     }
@@ -691,7 +708,7 @@ void end_game(Game **games, int game_index)
     {
         if (i == game_index)
         {
-            (*games)[i] = init_game(0, 0, 0);
+            init_game(&(*games)[i], 0, 0, 0);
             break;
         }
     }
@@ -701,6 +718,7 @@ int compare_uid(uint8_t *uid1, uint8_t *uid2)
 {
     for (int i = 0; i < 4; i++)
     {
+        printf("uid %d != uid %d", uid1[i], uid2[i]);
         if (uid1[i] != uid2[i])
             return 0;
     }

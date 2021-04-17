@@ -15,13 +15,38 @@ debug = False
 
 class States(Enum):
     SETUP = DefaultStates.STATE_START
-    WAIT_SERVER = 2
+    SET_UID = 2
     READ_SERVER = 3
     READ_INPUT = 4
     SEND = 5
     UPDATE = 6
     ERROR = 7
     END = 8
+
+class Errors(Enum):
+    INVALID_REQUEST = 30
+    INVALID_UID = 31
+    INVALID_TYPE = 32
+    INVALID_CONTEXT = 33
+    INVALID_PAYLOAD = 34
+    INVALID_SERVER = 40
+    INVALID_ACTION = 50
+    ACTION_OUT_OF_TURN = 51
+
+class RequestType(Enum):
+    CONFIRMATION = 1
+    INFORMATION = 2
+    META_ACTION = 3
+    GAME_ACTION = 4
+
+class RequestContext(Enum):
+    RULESET = 1
+    MAKE_MOVE = 1
+    QUIT = 1
+
+class ResponseType(Enum):
+    SUCCESS = 10
+    UPDATE = 20
 
 class Tile:
     def __init__(self, tile_id, tile_owner) -> None:
@@ -34,9 +59,9 @@ class Globals(Environment):
         self.id = -1
         self.setup = True
         self.move = -1
-        self.server_input = -1
+        self.server_input = []
         self.board = []
-        self.uid = 0
+        self.uid = [0, 0, 0, 0]
         for i in range(10):
             self.board.append(Tile(-4, -4))
 
@@ -56,30 +81,57 @@ def setup(env):
     print("loading...")
     print("Connecting to server")
 
-    confirmation = 1
-    ruleset = 1
     payLen = 2
     protocolVer = 1
     gId = 1
 
-    packet = [e.uid, e.uid, e.uid, e.uid, confirmation, ruleset, payLen, protocolVer, gId]
+    packet = [e.uid[0], e.uid[1], e.uid[2], e.uid[3], RequestType.CONFIRMATION, RequestContext.CONTEXT, payLen, protocolVer, gId]
     # print(packet)
-    s.sendall(bytes(packet))
+    s.sendall(bytearray(packet))
 
     # s.send("ping".encode())
     return States.WAIT_SERVER
 
+def set_uid(env):
+    inp = s.recv(10)
+    int_values = [x for x in inp]
+    
+    msg_type = int_values[0]
+    context = int_values[1]
+    payload_len = int_values[2]
+    if(payload_len != 4):
+        return States.ERROR
+
+    for i in range(4):
+        env.uid[i] = int_values[3 + i]
+    
+    print(inp)
+    print(int_values)
+    print(env.uid)
+    env.server_input = int_values
+
+    return States.GET_PLAYER
+
 def wait_server(env):
     if(debug):
         print("\n========== wait server state ==========")
-    msg_type = int.from_bytes(s.recv(1), 'big')
-    context = int.from_bytes(s.recv(1), 'big')
-    payload_len = int.from_bytes(s.recv(1), 'big')
-    env.uid = int.from_bytes(s.recv(payload_len), 'little')
+    
+    inp = s.recv(10)
+    int_values = [x for x in inp]
+    
+    msg_type = int_values[0]
+    context = int_values[1]
+    payload_len = int_values[2]
+    if(payload_len != 4):
+        return States.ERROR
 
+    for i in range(4):
+        env.uid[i] = int_values[3 + i]
+    
+    print(inp)
+    print(int_values)
     print(env.uid)
-
-    # TODO: error handling
+    env.server_input = int_values
 
     return States.READ_SERVER
 
@@ -87,14 +139,13 @@ def wait_server(env):
 def read_server(env):
     if(debug):
         print("\n========== read server state ==========")
-    inp = ""
+    inp = []
 
     inp = s.recv(1024)
-    
-    message = get_message(s)
 
-    # if (message["header"]["msg_type"] == 20):
-    #     env.id = (message["payload"][0])    # 1 = X, 2 = O
+    # if code is update, obtain player X or O
+    if (inp[0] == ResponseType.UPDATE):
+        print(inp[-1]) # last item in data is player 
 
     if(debug):
         print("Client received: ", inp)
@@ -135,7 +186,12 @@ def send(env):
     if(debug):
         print("\n========== send state ==========")
         print("sending " + str(env.move) + " to server")
-    s.send(str(env.move).encode())
+        
+    payLen = 1
+    packet = [env.uid[0], env.uid[1], env.uid[2], env.uid[3], RequestType.GAME_ACTION, RequestContext.MAKE_MOVE, payLen, env.move]
+    s.sendall(bytearray(packet))
+
+    # s.send(str(env.move).encode())
     return States.READ_SERVER
 
 def update(env):
@@ -152,6 +208,7 @@ def update(env):
 
         print("9: ", env.board[9].id, env.board[9].owner)
 
+    # draw board
     for i in range(9):
         c = "?"
 
@@ -191,35 +248,6 @@ def end(env):
         return States.ERROR
 
     return DefaultStates.STATE_EXIT
-    
-def get_message(s):
-    header = get_header(s)
-
-    payload_len = header["payload_length"]
-    if (payload_len != 0):
-        payload = get_payload(s, header)
-    else:
-        payload = {"payload": None}
-    
-    message = {'header': header, 'payload': payload}
-
-    return message
-
-def get_header(s):
-    msg_type = int.from_bytes(s.recv(1), 'big')
-    context = int.from_bytes(s.recv(1), 'big')
-    payload_len = int.from_bytes(s.recv(1), 'big')
-
-    header = {"msg_type": msg_type, "context": context, "payload_length": payload_len}
-
-    return header
-
-def get_payload(s, header):
-    payload = []
-    for i in range(0, header['payload_length']):
-        payload.append(int.from_bytes(s.recv(1), 'big'))
-
-    return payload
 
 def common_error(env):
     print("error found")
