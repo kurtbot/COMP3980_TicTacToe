@@ -107,7 +107,6 @@ void send_to_client(int client, int nbytes_recvd, uint8_t *recv_buf, fd_set *mas
 void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int *numrooms);
 void send_uid(int client);
 int init_verification(uint8_t reqtype, uint8_t context, uint8_t paylen, uint8_t *payload);
-int send_res(int type, int context, int paylen, int *payload);
 //      struct functions
 void init_waiting(WaitList **waiting);
 void add_to_wait(WaitList **waiting, int client, int game);
@@ -121,9 +120,10 @@ void create_game(Game **games, int fdp1, int fdp2, int game);
 void end_game(Game **games, int game_index);
 void not_your_turn(int client);
 int handle_ttt(Game *game, int client, uint8_t *buff);
-int compare_uid(uint8_t *uid1, uint8_t *uid2);
+int handle_rps(Game *game, int client, uint8_t *buff);
 static int checkWinner(int board[3][3]);
 static int equals3(int a, int b, int c);
+static int rps_compare(int move1, int move2);
 // Function Definitions
 
 void send_to_client(int client, int nbytes_recvd, uint8_t *recv_buf, fd_set *master)
@@ -159,10 +159,6 @@ void send_uid(int client)
         };
 
     write(client, res, 7);
-}
-
-int send_res(int type, int context, int paylen, int *payload)
-{
 }
 
 int init_verification(uint8_t reqtype, uint8_t context, uint8_t paylen, uint8_t *payload)
@@ -455,19 +451,12 @@ void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int
     }
     else
     {
+        uint32_t converted_uid = (buff[1] << 24) | (buff[1] << 16) | (buff[2] << 8) | buff[3];
+        printf("converted uid %d\n", converted_uid);
         // Read client move
         int game = get_player_game(games, client);
         if ((*games)[game].type == TTT)
         {
-            int uid = client;
-            uint8_t client_uid[] = {
-                (uid >> 24) & 0xFF,
-                (uid >> 16) & 0xFF,
-                (uid >> 8) & 0xFF,
-                uid & 0xFF,
-            };
-            uint32_t converted_uid = (buff[1] << 24) | (buff[1] << 16) | (buff[2] << 8) | buff[3];
-            printf("converted uid %d\n", converted_uid);
             printf("client %d send data\n", client);
             int rettype = -1;
             if ((*games)[game].ttt_turn == 1)
@@ -481,7 +470,6 @@ void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int
 
                     if (rettype != UPDATE)
                     {
-
                         int payload_length = 2;
                         uint8_t payload[] = {
                             rettype,
@@ -521,6 +509,97 @@ void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int
         }
         else if ((*games)[game].type == RPS)
         {
+            if (DEBUG)
+                printf("handling rps\n");
+
+            if (converted_uid == client)
+            {
+                if ((*games)[game].fdp1 == client)
+                {
+                    if (buff[6] != 1)
+                    {
+                        uint8_t payload[] = {
+                            INVALID_PAYLOAD,
+                            0};
+                        write(client, payload, 2);
+                        return;
+                    }
+                    if (buff[7] == ROCK || buff[7] == PAPER || buff[7] == SCISSORS)
+                        (*games)[game].rps_p2_move = buff[7];
+                    else
+                    {
+                        uint8_t payload[] = {
+                            INVALID_PAYLOAD,
+                            0};
+                        write(client, payload, 2);
+                        return;
+                    }
+                }
+                else
+                {
+                    if (buff[6] != 1)
+                    {
+                        uint8_t payload[] = {
+                            INVALID_PAYLOAD,
+                            0};
+                        write(client, payload, 2);
+                        return;
+                    }
+                    if (buff[7] == ROCK || buff[7] == PAPER || buff[7] == SCISSORS)
+                        (*games)[game].rps_p2_move = buff[7];
+                    else
+                    {
+                        uint8_t payload[] = {
+                            INVALID_PAYLOAD,
+                            0};
+                        write(client, payload, 2);
+                        return;
+                    }
+                }
+
+                if ((*games)[game].rps_p2_move != 0 && (*games)[game].rps_p1_move != 0)
+                {
+                    int winner = rps_compare((*games)[game].rps_p1_move, (*games)[game].rps_p2_move);
+
+                    if (winner == 3)
+                    {
+                        int payload_len = 1;
+                        uint8_t drawres[] = {
+                            UPDATE,
+                            END_OF_GAME,
+                            payload_len,
+                            3};
+                        write((*games)[game].fdp1, drawres, 4);
+                        write((*games)[game].fdp2, drawres, 4);
+                    }
+                    else
+                    {
+                        int payload_len = 1;
+                        uint8_t winres[] = {
+                            UPDATE,
+                            END_OF_GAME,
+                            payload_len,
+                            1};
+
+                        uint8_t loseres[] = {
+                            UPDATE,
+                            END_OF_GAME,
+                            payload_len,
+                            2};
+
+                        if (winner == 1)
+                        {
+                            write((*games)[game].fdp1, winres, 4);
+                            write((*games)[game].fdp2, loseres, 4);
+                        }
+                        else
+                        {
+                            write((*games)[game].fdp1, loseres, 4);
+                            write((*games)[game].fdp2, winres, 4);
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -714,17 +793,6 @@ void end_game(Game **games, int game_index)
     }
 }
 
-int compare_uid(uint8_t *uid1, uint8_t *uid2)
-{
-    for (int i = 0; i < 4; i++)
-    {
-        printf("uid %d != uid %d", uid1[i], uid2[i]);
-        if (uid1[i] != uid2[i])
-            return 0;
-    }
-    return 1;
-}
-
 void not_your_turn(int client)
 {
     int payload_length = 2;
@@ -771,6 +839,38 @@ static int checkWinner(int board[3][3])
 static int equals3(int a, int b, int c)
 {
     return (a == b && b == c && a != -1);
+}
+
+static int rps_compare(int move1, int move2)
+{
+    if (move1 == ROCK && move2 == PAPER)
+    {
+        return 2;
+    }
+    else if (move1 == PAPER && move2 == ROCK)
+    {
+        return 1;
+    }
+
+    if (move1 == PAPER && move2 == SCISSORS)
+    {
+        return 2;
+    }
+    else if (move1 == SCISSORS && move2 == PAPER)
+    {
+        return 1;
+    }
+
+    if (move1 == SCISSORS && move2 == ROCK)
+    {
+        return 2;
+    }
+    else if (move1 == ROCK && move2 == SCISSORS)
+    {
+        return 1;
+    }
+
+    return 3;
 }
 // Main Function
 
