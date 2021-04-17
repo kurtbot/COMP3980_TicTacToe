@@ -13,40 +13,42 @@ s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 debug = False
 
+INVALID_REQUEST = 30
+INVALID_UID = 31
+INVALID_TYPE = 32
+INVALID_CONTEXT = 33
+INVALID_PAYLOAD = 34
+INVALID_SERVER = 40
+INVALID_ACTION = 50
+ACTION_OUT_OF_TURN = 51
+
+CONFIRMATION = 1
+INFORMATION = 2
+META_ACTION = 3
+GAME_ACTION = 4
+
+RULESET = 1
+MAKE_MOVE = 1
+QUIT = 1
+
+SUCCESS = 10
+UPDATE = 20
+
+START_OF_GAME = 1
+MOVE_MADE = 2
+END_GAME = 3
+OPPONENT_DC = 4
+
 class States(Enum):
     SETUP = DefaultStates.STATE_START
-    SET_UID = 2
-    READ_SERVER = 3
-    READ_INPUT = 4
-    SEND = 5
+    WAIT_SERVER = 2
+    GET_GAME = 3
+    MOVE = 4
+    WAIT = 5
     UPDATE = 6
     ERROR = 7
     END = 8
 
-class Errors(Enum):
-    INVALID_REQUEST = 30
-    INVALID_UID = 31
-    INVALID_TYPE = 32
-    INVALID_CONTEXT = 33
-    INVALID_PAYLOAD = 34
-    INVALID_SERVER = 40
-    INVALID_ACTION = 50
-    ACTION_OUT_OF_TURN = 51
-
-class RequestType(Enum):
-    CONFIRMATION = 1
-    INFORMATION = 2
-    META_ACTION = 3
-    GAME_ACTION = 4
-
-class RequestContext(Enum):
-    RULESET = 1
-    MAKE_MOVE = 1
-    QUIT = 1
-
-class ResponseType(Enum):
-    SUCCESS = 10
-    UPDATE = 20
 
 class Tile:
     def __init__(self, tile_id, tile_owner) -> None:
@@ -59,11 +61,14 @@ class Globals(Environment):
         self.id = -1
         self.setup = True
         self.move = -1
+        self.sender = -1
         self.server_input = []
         self.board = []
+        self.turn = False
         self.uid = [0, 0, 0, 0]
+        self.win = 0
         for i in range(10):
-            self.board.append(Tile(-4, -4))
+            self.board.append(Tile(-4, -4))     
 
 
 def setup(env):
@@ -81,132 +86,131 @@ def setup(env):
     print("loading...")
     print("Connecting to server")
 
+    # TODO HANDSHAKE HERE
     payLen = 2
     protocolVer = 1
     gId = 1
+    reqType = CONFIRMATION
+    reqContext = RULESET
 
-    packet = [e.uid[0], e.uid[1], e.uid[2], e.uid[3], RequestType.CONFIRMATION, RequestContext.CONTEXT, payLen, protocolVer, gId]
-    # print(packet)
+    packet = [e.uid[0], e.uid[1], e.uid[2], e.uid[3], reqType, reqContext, payLen, protocolVer, gId]
     s.sendall(bytearray(packet))
 
-    # s.send("ping".encode())
     return States.WAIT_SERVER
 
 def set_uid(env):
-    inp = s.recv(10)
+    inp = s.recv(7)
     int_values = [x for x in inp]
     
     msg_type = int_values[0]
-    context = int_values[1]
-    payload_len = int_values[2]
-    if(payload_len != 4):
+    int_values.pop(0)
+    if(msg_type != SUCCESS):
         return States.ERROR
-
-    for i in range(4):
-        env.uid[i] = int_values[3 + i]
-    
-    print(inp)
-    print(int_values)
-    print(env.uid)
-    env.server_input = int_values
-
-    return States.GET_PLAYER
-
-def wait_server(env):
-    if(debug):
-        print("\n========== wait server state ==========")
-    
-    inp = s.recv(10)
-    int_values = [x for x in inp]
-    
-    msg_type = int_values[0]
-    context = int_values[1]
-    payload_len = int_values[2]
-    if(payload_len != 4):
-        return States.ERROR
-
-    for i in range(4):
-        env.uid[i] = int_values[3 + i]
-    
-    print(inp)
-    print(int_values)
-    print(env.uid)
-    env.server_input = int_values
-
-    return States.READ_SERVER
-
-
-def read_server(env):
-    if(debug):
-        print("\n========== read server state ==========")
-    inp = []
-
-    inp = s.recv(1024)
-
-    # if code is update, obtain player X or O
-    if (inp[0] == ResponseType.UPDATE):
-        print(inp[-1]) # last item in data is player 
-
-    if(debug):
-        print("Client received: ", inp)
-    server_input = int(inp)
-
-    # if (server_input < 9 and env.setup):
-    #     env.id = 0  # player 2
-    # elif (server_input == 9 and env.setup):
-    #     env.id = 1  # player 1
-    env.setup = False
-
-    env.server_input = server_input
-
-    # Verify Server Data
-    if(server_input < 9):
-        return States.UPDATE
-    elif (server_input == 9):
-        return States.READ_INPUT
-    elif (server_input >= 10):
-        return States.END
-    else:
-        return States.ERROR
-    
-def read_input(env):
-    if(debug):
-        print("\n========== read input state ==========")
-    inp = ""
-
-    while(not inp.isdigit()):
-        inp = input("Input Move [" + ('X','O')[env.id == 1] + "]: ")
-
-    client_input = int(inp)
-
-    env.move = client_input
-    return States.SEND
-
-def send(env):
-    if(debug):
-        print("\n========== send state ==========")
-        print("sending " + str(env.move) + " to server")
         
+    context = int_values[0]
+    int_values.pop(0)
+    if(context != CONFIRMATION):
+        return States.ERROR
+
+    payload_len = int_values[0]
+    int_values.pop(0)
+    if(payload_len != 4):
+        return States.ERROR
+
+    for i in range(4):
+        env.uid[i] = int_values[0]
+        int_values.pop(0)
+    
+    env.server_input = int_values
+
+    return States.GET_GAME
+
+def get_game(env):
+    if(debug):
+        print("\n========== get game state ==========")
+    
+    inp = s.recv(4)
+    int_values = [x for x in inp]
+
+    dtype = int_values[0]
+    int_values.pop(0)
+    if(dtype != UPDATE):
+        return States.ERROR
+    
+    dcontext = int_values[0]
+    int_values.pop(0)
+    if(dcontext != START_OF_GAME):
+        return States.ERROR
+
+    dpaylen = int_values[0]
+    int_values.pop(0)
+    if(dpaylen != 1):
+        return States.ERROR
+
+    dpayload = int_values[0]
+    int_values.pop(0)
+    if(dpayload == 1):
+        env.id = dpayload
+        env.turn = True
+        return States.MOVE
+
+    if(dpayload == 2):
+        env.id = dpayload
+        env.turn = False
+        return States.WAIT
+
+    return States.ERROR
+
+def move(env):
+    if(debug):
+        print("\n========== move state ==========")
+
+    cinput = input("Input move: ")
+
     payLen = 1
-    packet = [env.uid[0], env.uid[1], env.uid[2], env.uid[3], RequestType.GAME_ACTION, RequestContext.MAKE_MOVE, payLen, env.move]
+    reqType = GAME_ACTION
+    reqContext = MAKE_MOVE
+    
+    packet = [env.uid[0], env.uid[1], env.uid[2], env.uid[3], reqType, reqContext, payLen, int(cinput)]
     s.sendall(bytearray(packet))
 
-    # s.send(str(env.move).encode())
-    return States.READ_SERVER
+    return States.WAIT
+
+def wait(env):
+    if(debug):
+        print("\n========== wait state ==========")
+
+    inp = s.recv(5)
+    int_values1 = [x for x in inp]
+    if(debug):
+        print(int_values1)
+    
+    # DISGUSTING
+    if(int_values1[0] == INVALID_ACTION):
+        return States.MOVE
+    elif(int_values1[0] == UPDATE):
+        if(int_values1[1] == MOVE_MADE):
+            if(int_values1[2] == 1):
+                env.move = int_values1[3]
+                return States.UPDATE
+            else:
+                return States.ERROR
+        if(int_values1[1] == END_GAME):
+            if(int_values1[2] == 2):
+                env.win = int_values1[3]
+                env.move = int_values1[4]
+                return States.END
+            else:
+                return States.ERROR
+        else:
+            States.ERROR
+    else:
+        States.ERROR
 
 def update(env):
-    if(debug):
-        print("\n========== update state ==========")
-
-    env.board[env.server_input].owner = (0, 1) [env.id == 0]
-
-    env.board[env.move].owner = env.id
-
-    if(debug):
-        for i in range(9):
-            print("", env.board[i].id, env.board[i].owner)
-
-        print("9: ", env.board[9].id, env.board[9].owner)
+    env.board[env.move].owner = ((1,2) [env.id == 1] , env.id) [env.turn]
+    if (debug):
+        print("update move")
 
     # draw board
     for i in range(9):
@@ -214,40 +218,48 @@ def update(env):
 
         if(env.board[i].owner == 1):
             c = "O"
-        elif (env.board[i].owner == 0):
+        elif (env.board[i].owner == 2):
             c = "X"
 
         print(c, end='')
         if (i == 2 or i == 5 or i == 8):
             print('\n', end='')
-    
-    return States.READ_INPUT
 
+    if(not env.turn):
+        if (debug):
+            print("update move")
+        env.turn = not env.turn
+        return States.MOVE
+    else:
+        if (debug):
+            print("update wait")
+        env.turn = not env.turn
+        return States.WAIT
 
 def end(env):
-    if(env.id == 1 and env.server_input == 10):
-        # PLAYER 1 WIN
-        print("You Win")
-    elif(env.id == 1 and env.server_input == 11):
-        # PLAYER 1 LOSE
-        print("You Lose")
-    elif(env.id == 0 and env.server_input == 10):
-        # PLAYER 2 LOSE
-        print("You Lose")
-    elif(env.id == 0 and env.server_input == 11):
-        # PLAYER 2 WIN
-        print("You Win")
-    elif(env.server_input == 12):
-        # DRAW
-        print("Draw")
-    elif(env.server_input == 13):
-        # OPPONENT LEFT
-        print("Opponent Left")
-    else:
-        # ERROR
-        return States.ERROR
+    env.board[env.move].owner = ((1,2) [env.id == 1] , env.id) [env.turn]
 
-    return DefaultStates.STATE_EXIT
+    # draw board
+    for i in range(9):
+        c = "?"
+
+        if(env.board[i].owner == 1):
+            c = "O"
+        elif (env.board[i].owner == 2):
+            c = "X"
+
+        print(c, end='')
+        if (i == 2 or i == 5 or i == 8):
+            print('\n', end='')
+
+    if(env.win == 1):
+        print("You Win")
+    elif(env.win == 2):
+        print("You Lose")
+    else:
+        print("Draw")
+
+    return DefaultStates.STATE_NULL
 
 def common_error(env):
     print("error found")
@@ -258,20 +270,19 @@ def main():
 
     tran_table = [
         Transition(DefaultStates.STATE_INIT, States.SETUP, setup),
-        Transition(States.SETUP, States.WAIT_SERVER, wait_server),
+        Transition(States.SETUP, States.WAIT_SERVER, set_uid),
         Transition(States.SETUP, States.ERROR, common_error),
-        Transition(States.WAIT_SERVER, States.READ_SERVER, read_server),
-        Transition(States.READ_SERVER, States.READ_INPUT, read_input),
-        Transition(States.READ_SERVER, States.UPDATE, update),
-        Transition(States.READ_SERVER, States.ERROR, common_error),
-        Transition(States.READ_INPUT, States.SEND, send),
-        Transition(States.READ_INPUT, States.ERROR, common_error),
-        Transition(States.UPDATE, States.READ_INPUT, read_input),
-        Transition(States.UPDATE, States.ERROR, common_error),
-        Transition(States.SEND, States.READ_SERVER, read_server),
-        Transition(States.SEND, States.ERROR, common_error),
-        Transition(States.READ_SERVER, States.END, end),
-        Transition(States.END, DefaultStates.STATE_EXIT, None),
+        Transition(States.WAIT_SERVER, States.GET_GAME, get_game),
+        Transition(States.GET_GAME, States.MOVE, move),
+        Transition(States.GET_GAME, States.WAIT, wait),
+        Transition(States.MOVE, States.WAIT, wait),
+        Transition(States.WAIT, States.MOVE, move),
+        Transition(States.WAIT, States.UPDATE, update),
+        Transition(States.WAIT, States.ERROR, common_error),
+        Transition(States.UPDATE, States.MOVE, move),
+        Transition(States.UPDATE, States.WAIT, wait),
+        Transition(States.WAIT, States.END, end),
+        Transition(States.END, DefaultStates.STATE_NULL, None),
         Transition(States.END, States.ERROR, common_error),
         Transition(DefaultStates.STATE_NULL, DefaultStates.STATE_NULL, None),
     ]

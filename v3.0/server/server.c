@@ -168,6 +168,7 @@ int send_res(int type, int context, int paylen, int *payload)
 int init_verification(uint8_t reqtype, uint8_t context, uint8_t paylen, uint8_t *payload)
 {
     for (int j = 0; j < 9; j++)
+    if (DEBUG)
         printf("data %d %d\n", j, payload[j]);
 
     if ((uint32_t)reqtype != CONFIRMATION)
@@ -204,7 +205,6 @@ void connection_accept(fd_set *master, int *fdmax, int sockfd, struct sockaddr_i
         uint8_t buff[BUFF_SIZE];
         int retval = 0;
         retval = read(newsockfd, buff, BUFF_SIZE);
-        printf("retval 1 %d\n", retval);
         if (retval == 0)
         {
             perror("read");
@@ -213,7 +213,6 @@ void connection_accept(fd_set *master, int *fdmax, int sockfd, struct sockaddr_i
         else
         {
             retval = init_verification(buff[4], buff[5], buff[6], buff);
-            printf("retval 2 %d\n", retval);
             if (retval == SUCCESS)
             {
                 // return UID
@@ -225,16 +224,19 @@ void connection_accept(fd_set *master, int *fdmax, int sockfd, struct sockaddr_i
                 }
 
                 int pair = 0;
-                printf("pair %d\n", pair);
+                if (DEBUG)
+                    printf("pair %d\n", pair);
                 int gameType = buff[8];
-                printf("gametype %d\n", gameType);
+                if(DEBUG)
+                    printf("gametype %d\n", gameType);
                 if ((pair = find_pair(waiting, gameType)) == 0)
                 {
                     add_to_wait(waiting, newsockfd, gameType);
                 }
                 else
                 {
-                    printf("new game created between player %d and player %d\n", newsockfd, pair);
+                    if(DEBUG)
+                        printf("new game created between player %d and player %d\n", newsockfd, pair);
                     create_game(games, newsockfd, pair, gameType);
                     remove_from_wait(waiting, pair);
                 }
@@ -288,13 +290,6 @@ void connect_request(int *sockfd, struct sockaddr_in *my_addr)
         exit(1);
     }
 
-    // udp
-    // if ((*sockfd = socket(AF_INET, SOCK_DGRAM, 0) == -1))
-    // {
-    //     perror("Socket UDP error");
-    //     exit(1);
-    // }
-
     bind(*sockfd, (struct sockaddr *)my_addr, sizeof(struct sockaddr));
 
     printf("\nServer: Waiting for client on port %d\n", PORT);
@@ -303,7 +298,8 @@ void connect_request(int *sockfd, struct sockaddr_in *my_addr)
 
 int handle_ttt(Game *game, int client, uint8_t *buff)
 {
-    printf("handling ttt\n");
+    if(DEBUG)
+        printf("handling ttt\n");
     // type
     int reqType = buff[4];
 
@@ -322,18 +318,21 @@ int handle_ttt(Game *game, int client, uint8_t *buff)
 
     // move
     int move = buff[7];
-    printf("move %d\n", move);
+    if(DEBUG)
+        printf("move %d\n", move);
     if (move > 8 || move < 0)
         return INVALID_ACTION;
 
-    printf("board move %d\n", game->ttt_board[move]);
+    if(DEBUG)
+        printf("board move %d\n", game->ttt_board[move]);
     if (game->ttt_board[move] != -1)
         return INVALID_ACTION;
 
     (*game).ttt_board[move] = (*game).ttt_turn;
 
     // change turn
-    printf("change turn\n");
+    if(DEBUG)
+        printf("change turn\n");
     (*game).ttt_turn = (*game).ttt_turn == O ? X : O;
 
     for (int i = 0; i < 10; i++)
@@ -370,7 +369,8 @@ int handle_ttt(Game *game, int client, uint8_t *buff)
         }
     }
 
-    printf("check winner\n");
+    if (DEBUG)
+        printf("check winner\n");
     // Check Win
     int winner;
     if ((winner = checkWinner(board)) != -1)
@@ -417,12 +417,14 @@ int handle_ttt(Game *game, int client, uint8_t *buff)
 
 void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int *numrooms)
 {
-    printf("client %d read\n", client);
+    if(DEBUG)
+        printf("client %d read\n", client);
     int num_bytes;
     uint8_t buff[BUFF_SIZE];
     if ((num_bytes = read(client, buff, BUFF_SIZE)) <= 0)
     {
-        printf("numbytes %d\n", num_bytes);
+        if(DEBUG)
+            printf("numbytes %d\n", num_bytes);
         int game_pair;
         int game;
         if (num_bytes == 0)
@@ -431,12 +433,10 @@ void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int
             game = get_player_game(games, client);
             if (game_pair == -1)
             {
-                printf("%s\n", "hello mf");
                 remove_from_wait(waiting, client);
             }
             else
             {
-                printf("%s\n", "bye mf");
                 end_game(games, game);
                 int quitMessageLength = 3;
                 uint8_t quitPayloadLength = 0;
@@ -467,12 +467,15 @@ void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int
                 uid & 0xFF,
             };
             uint32_t converted_uid = (buff[1] << 24) | (buff[1] << 16) | (buff[2] << 8) | buff[3];
-            printf("converted uid %d\n", converted_uid);
-            printf("client %d send data\n", client);
+            if (DEBUG) {
+                printf("converted uid %d\n", converted_uid);
+                printf("client %d send data\n", client);
+            }
             int rettype = -1;
             if ((*games)[game].ttt_turn == 1)
             {
-                printf("handle TTT 1\n");
+                if (DEBUG)
+                    printf("handle TTT 1\n");
                 if (converted_uid == client)
                 {
                     int paylen = buff[6];
@@ -491,13 +494,15 @@ void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int
                 }
                 else
                 {
-                    printf("not your turn 1\n");
+                    if (DEBUG)
+                        printf("not your turn 1\n");
                     not_your_turn(client);
                 }
             }
             else
             {
-                printf("handle TTT 2\n");
+                if (DEBUG)
+                    printf("handle TTT 2\n");
                 if (converted_uid == client)
                 {
                     int paylen = buff[6];
@@ -509,14 +514,16 @@ void send_recv(int client, fd_set *master, WaitList **waiting, Game **games, int
                 }
                 else
                 {
-                    printf("not your turn 2\n");
+                    if (DEBUG)
+                        printf("not your turn 2\n");
                     not_your_turn(client);
                 }
             }
 
             for (int i = 0; i < num_bytes; i++)
             {
-                printf("client %d data[%d] : %d\n", client, i, (uint32_t)buff[i]);
+                if (DEBUG)
+                    printf("client %d data[%d] : %d\n", client, i, (uint32_t)buff[i]);
             }
         }
         else if ((*games)[game].type == RPS)
@@ -560,7 +567,8 @@ void add_to_wait(WaitList **waiting, int client, int game)
     {
         if ((*waiting)[i].player == 0)
         {
-            printf("client %d added to waiting %d for game %d\n", client, i, game);
+            if (DEBUG)
+                printf("client %d added to waiting %d for game %d\n", client, i, game);
             (*waiting)[i].player = client;
             (*waiting)[i].gameType = game;
             break;
@@ -574,7 +582,8 @@ void remove_from_wait(WaitList **waiting, int client)
     {
         if ((*waiting)[i].player == client)
         {
-            printf("client %d remove to waiting %d\n", client, i);
+            if (DEBUG)
+                printf("client %d remove to waiting %d\n", client, i);
             (*waiting)[i].player = 0;
             (*waiting)[i].gameType = 0;
             break;
@@ -593,14 +602,12 @@ void init_games(Game **games)
 
     for (int i = 0; i < MAX_GAMES; i++)
     {
-        printf("initializing games\n");
         init_game(&(*games)[i], 0, 0, 0);
     }
 }
 
 void init_game(Game *g, int type, int fdp1, int fdp2)
 {
-    printf("intializing...\n");
     g->type = type;
     g->fdp1 = fdp1;
     g->fdp2 = fdp2;
@@ -610,7 +617,8 @@ void init_game(Game *g, int type, int fdp1, int fdp2)
         for (int i = 0; i < 9; i++)
         {
             (*g).ttt_board[i] = -1;
-            printf("board %d\n", g->ttt_board[i]);
+            if (DEBUG)
+                printf("board %d\n", g->ttt_board[i]);
         }
         g->ttt_turn = O;
     }
